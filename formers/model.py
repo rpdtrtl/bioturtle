@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 import math
 
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
 class InputEmbedding(nn.Module):
 
     def __init__(self, d_model: int, vocab_size: int):
@@ -44,7 +46,7 @@ class LayerNormalization(nn.Module):
         super().__init__()
         self.eps = eps
         self.alpha = nn.Parameter(torch.ones(1)) # Multiplied
-        self.bias = nn.Parameter(torch.zeros(0)) # Added
+        self.bias = nn.Parameter(torch.zeros(1)) # Added
 
     def forward(self, x):
         mean = x.mean(dim = -1, keepdim = True)
@@ -61,10 +63,10 @@ class FeedForwardBlock(nn.Module):
 
     def forward(self, x):
         # (Batch, Seq_Len, d_model) --> (Batch, Seq_Len, d_ff) --> (Batch, Seq_Len, d_model)
-        return self.linear_2(self.dropout(torch.relu(self.linear1(x))))
+        return self.linear_2(self.dropout(torch.relu(self.linear_1(x))))
     
     
-class MultiHeadAttentionBlock(nn.Model):
+class MultiHeadAttentionBlock(nn.Module):
 
     def __init__(self, d_model: int, h: int, dropout: float) -> None:
         super().__init__()
@@ -83,6 +85,8 @@ class MultiHeadAttentionBlock(nn.Model):
     @staticmethod
     def attention(query, key, value, mask, dropout: nn.Dropout):
         d_k = query.shape[-1]
+        if mask is not None:
+            mask = mask.to(device)
 
         # (Batch, h , Seq_Len, d_k) --> (Batch, h, Seq_Len, Seq_Len)
         attention_scores = (query @ key.transpose(-2, -1)) / math.sqrt(d_k)
@@ -132,7 +136,7 @@ class EncoderBlock(nn.Module):
 
     def forward(self, x, src_mask):
         x = self.residual_connections[0](x, lambda x: self.self_attention_block(x, x, x, src_mask))
-        x = self.feed_forward_block[1](x, self.feed_forward_block)
+        x = self.residual_connections[1](x, self.feed_forward_block)
         return x
     
 class Encoder(nn.Module):

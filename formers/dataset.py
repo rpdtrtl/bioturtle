@@ -1,11 +1,13 @@
 import torch
 import torch.nn as nn
-from torch.utils import Dataset
+from torch.utils.data import Dataset
+from typing import Any
 
 class BilingualDataset(Dataset):
     
     def __init__(self, ds, tokenizer_src, tokenizer_tgt, src_lang, tgt_lang, seq_len) -> None:
         super().__init__()
+        self.seq_len = seq_len
 
         self.ds = ds
         self.tokenizer_src = tokenizer_src
@@ -13,15 +15,15 @@ class BilingualDataset(Dataset):
         self.src_lang = src_lang
         self.tgt_lang = tgt_lang
 
-        self.sos_token = torch.Tensor([tokenizer_src.token_to_id(['SOS'])], dtype=torch.int64)
-        self.eos_token = torch.Tensor([tokenizer_src.token_to_id(['EOS'])], dtype=torch.int64)
-        self.pad_token = torch.Tensor([tokenizer_src.token_to_id(['PAD'])], dtype=torch.int64)
+        self.sos_token = torch.tensor([tokenizer_tgt.token_to_id("[SOS]")], dtype=torch.int64)
+        self.eos_token = torch.tensor([tokenizer_tgt.token_to_id("[EOS]")], dtype=torch.int64)
+        self.pad_token = torch.tensor([tokenizer_tgt.token_to_id("[PAD]")], dtype=torch.int64)
 
     def __len__(self):
         return len(self.ds)
     
     def __getitem__(self, index: Any) -> Any:
-        src_target_pair = self.ds(index)
+        src_target_pair = self.ds[index]
         src_text = src_target_pair['translation'][self.src_lang]
         tgt_text = src_target_pair['translation'][self.tgt_lang]
 
@@ -58,7 +60,7 @@ class BilingualDataset(Dataset):
             [
                 torch.tensor(dec_input_tokens, dtype=torch.int64),
                 self.eos_token,
-                torch.tnesor([self.pad_token] * dec_num_padding_tokens, dtype=torch.int64)
+                torch.tensor([self.pad_token] * dec_num_padding_tokens, dtype=torch.int64)
             ]
         )
         

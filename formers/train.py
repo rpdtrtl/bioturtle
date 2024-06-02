@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from torch.utils import Dataset, Dataloader, random_split
+from torch.utils.data import Dataset, DataLoader, random_split
 from tqdm import tqdm
 
 from dataset import BilingualDataset, causal_mask
@@ -11,7 +11,7 @@ from config import get_weights_file_path, get_config
 from datasets import load_dataset
 from tokenizers import Tokenizer
 from tokenizers.models import WordLevel
-from tokenizers.trainers import WorlLevelTrainer
+from tokenizers.trainers import WordLevelTrainer
 from tokenizers.pre_tokenizers import Whitespace
 
 from torch.utils.tensorboard import SummaryWriter
@@ -21,16 +21,16 @@ from pathlib import Path
 
 def get_all_sentences(ds, lang):
     for item in ds:
-        yield item['trainslation'][lang]
+        yield item['translation'][lang]
 
 def get_or_build_tokenizer(config, ds, lang):
     tokenizer_path = Path(config['tokenizer_file'].format(lang))
     if not Path.exists(tokenizer_path):
-        tokenizer = Tokenizer(WordLevel(unk_token=['UNK']))
+        tokenizer = Tokenizer(WordLevel(unk_token="[UNK]"))
         tokenizer.pre_tokenizer = Whitespace()
-        trainer = WorlLevelTrainer(special_tokens=["[UNK]", "[PAD]", "[SOS]", "[EOS]"], min_frequency=2)
+        trainer = WordLevelTrainer(special_tokens=["[UNK]", "[PAD]", "[SOS]", "[EOS]"], min_frequency=2)
         tokenizer.train_from_iterator(get_all_sentences(ds, lang), trainer=trainer)
-        tokenizer.save(tokenizer_path)
+        tokenizer.save(str(tokenizer_path))
     else:
         tokenizer = Tokenizer.from_file(str(tokenizer_path))
     return tokenizer
@@ -44,12 +44,12 @@ def get_ds(config):
 
     # Keep 90% for training and 10% for validation
     train_ds_size = int(0.9 * len(ds_raw))
-    val_ds_size = int(0.1 * len(ds_raw))
-    trains_ds_raw, vas_ds_raw = random_split(ds_raw, [train_ds_size, val_ds_size])
+    val_ds_size = len(ds_raw) - train_ds_size
+    train_ds_raw, val_ds_raw = random_split(ds_raw, [train_ds_size, val_ds_size])
 
 
-    train_ds = BilingualDataset(trains_ds_raw, tokenizer_src, tokenizer_tgt, config['lang_src'], config['lang_tgt'], config['seq_len'])
-    val_ds = BilingualDataset(vas_ds_raw, tokenizer_src, tokenizer_tgt, config['lang_src'], config['lang_tgt'], config['seq_len'])
+    train_ds = BilingualDataset(train_ds_raw, tokenizer_src, tokenizer_tgt, config['lang_src'], config['lang_tgt'], config['seq_len'])
+    val_ds = BilingualDataset(val_ds_raw, tokenizer_src, tokenizer_tgt, config['lang_src'], config['lang_tgt'], config['seq_len'])
 
     max_len_src = 0
     max_len_tgt = 0
@@ -63,8 +63,8 @@ def get_ds(config):
     print(f'Max length of source sentence: {max_len_src}')
     print(f'Max length of targer sentence: {max_len_tgt}')
 
-    train_dataloader = Dataloader(train_ds, batch_size=config['batch_size'], shuffle=True)
-    val_dataloader = Dataloader(val_ds, batch_size=1, shuffle=True)
+    train_dataloader = DataLoader(train_ds, batch_size=config['batch_size'], shuffle=True)
+    val_dataloader = DataLoader(val_ds, batch_size=1, shuffle=True)
 
     return train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt
 
